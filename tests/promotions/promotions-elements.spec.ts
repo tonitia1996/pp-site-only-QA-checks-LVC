@@ -1,8 +1,9 @@
+
 // tests/promotions/promotions-elements.spec.ts
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { Utils } from '../helpers/utils';
 
-async function scrollPage(page, steps = 6) {
+async function scrollPage(page: Page, steps = 6) {
   const height = await page.evaluate(() => document.body.scrollHeight);
   const chunk = Math.max(Math.floor(height / steps), 400);
   for (let y = 0; y <= height + 1000; y += chunk) {

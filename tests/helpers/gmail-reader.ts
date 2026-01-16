@@ -1,6 +1,6 @@
 
 import Imap, { ImapMessage, ImapMessageBodyInfo } from 'imap';
-import { simpleParser, ParsedMail } from 'mailparser';
+import { simpleParser } from 'mailparser';
 
 interface FindEmailOptions {
   subjectIncludes?: string;
@@ -24,12 +24,14 @@ export async function findEmail({
 
   return new Promise((resolve, reject) => {
 
-    // Explicitly ensure env vars are strings
+    // Ensure env vars are defined
     const user = process.env.GMAIL_USERNAME ?? '';
     const password = process.env.GMAIL_APP_PASSWORD ?? '';
 
     if (!user || !password) {
-      return reject(new Error("GMAIL_USERNAME or GMAIL_APP_PASSWORD env var missing"));
+      return reject(
+        new Error('GMAIL_USERNAME or GMAIL_APP_PASSWORD environment variable missing')
+      );
     }
 
     const imap = new Imap({
@@ -40,12 +42,13 @@ export async function findEmail({
       tls: true,
     });
 
-    const openInbox = (cb: (err: Error | null, box: Imap.Box | undefined) => void) => {
+    const openInbox = (
+      cb: (err: Error | null, box: Imap.Box | undefined) => void
+    ) => {
       imap.openBox('INBOX', true, cb);
     };
 
     imap.once('ready', () => {
-      // wait a few seconds for email to arrive
       setTimeout(() => {
         openInbox((err, box) => {
           if (err) return reject(err);
@@ -58,7 +61,7 @@ export async function findEmail({
           if (searchCriteria.length === 0) searchCriteria.push('ALL');
 
           imap.search(searchCriteria, (err: Error | null, results: number[]) => {
-            if (err || !results?.length) {
+            if (err || !results || results.length === 0) {
               imap.end();
               return resolve(null);
             }
@@ -67,19 +70,19 @@ export async function findEmail({
 
             f.on('message', (msg: ImapMessage) => {
               msg.on('body', (stream: NodeJS.ReadableStream, info: ImapMessageBodyInfo) => {
-                simpleParser(stream, (err: Error | null, parsed: ParsedMail) => {
+                simpleParser(stream, (err: Error | null, parsed: any) => {
                   if (err) return reject(err);
 
                   const body = parsed.text?.toLowerCase() ?? '';
 
-                  const matches = bodyIncludes.every(b =>
+                  const matches = bodyIncludes.every((b) =>
                     body.includes(b.toLowerCase())
                   );
 
                   const result: EmailResult = {
                     subject: parsed.subject,
                     body: parsed.text,
-                    matches
+                    matches,
                   };
 
                   resolve(result);
