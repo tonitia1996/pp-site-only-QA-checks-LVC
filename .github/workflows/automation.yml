@@ -25,7 +25,8 @@ jobs:
       ############################################################
       # Auto-discover a live UK HTTP proxy (no VPN needed)
       ############################################################
-      - name: Discover working UK proxy
+      
+      - name: Discover working UK proxy (robust)
         id: get_proxy
         shell: bash
         run: |
@@ -33,55 +34,90 @@ jobs:
 
           echo "🔎 Fetching UK proxy candidates from public sources..."
           workdir="$(mktemp -d)"
-          list="$workdir/proxies_raw.txt"
+          raw="$workdir/raw.txt"
+          candidates="$workdir/candidates.txt"
 
-          # Source 1: ProxyScrape (HTTP, GB, <=4s timeout)
-          curl -fsSL 'https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=4000&country=gb&ssl=all&anonymity=all' \
-            | tr -d '\r' > "$list" || true
+          # --- Sources (tolerate intermittent failures) ---
+          # ProxyScrape (HTTP, GB)
+          curl -fsSL 'https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=5000&country=gb&ssl=all&anonymity=all' \
+            | tr -d '\r' >> "$raw" || true
 
-          # Source 2: proxy-list.download (HTTP, GB)
-          # (Sometimes rate-limited; use '|| true' to keep going if it fails)
+          # proxy-list.download (HTTP, GB)
           curl -fsSL 'https://www.proxy-list.download/api/v1/get?type=http&country=GB' \
-            | tr -d '\r' >> "$list" || true
+            | tr -d '\r' >> "$raw" || true
 
-          # Normalize -> add scheme, de-duplicate, keep non-empty
-          awk 'NF' "$list" | sed 's#^#http://#' | awk '!seen[$0]++' > "$workdir/proxies.txt"
+          # Geonode sample feed (HTTP, GB) – may be rate-limited
+          curl -fsSL 'https://proxylist.geonode.com/api/proxy-list?limit=200&page=1&sort_by=lastChecked&sort_type=desc&country=GB&protocols=http' \
+            | jq -r '.data[]?.ip + ":" + (.data[]?.port|tostring)' >> "$raw" 2>/dev/null || true
 
-          echo "➡ Candidate count: $(wc -l < "$workdir/proxies.txt")"
-          if [[ ! -s "$workdir/proxies.txt" ]]; then
-            echo "❌ Could not fetch any UK proxies." >&2
+          # Keep only IP:PORT lines (defensive)
+          grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$' "$raw" | awk '!seen[$0]++' > "$workdir/all_ipports.txt" || true
+
+          if [[ ! -s "$workdir/all_ipports.txt" ]]; then
+            echo "❌ No proxy candidates fetched. Public lists may be down. Re-run later." >&2
             exit 1
           fi
 
-          echo "🧪 Testing up to 50 proxies for GB IP..."
+          # Prefer known working ports (avoid 80 unless necessary)
+          awk -F: '($2 ~ /^(3128|8080|8000|8888|8118|1080|443)$/){print}' "$workdir/all_ipports.txt" > "$workdir/preferred.txt" || true
+          awk -F: '($2 !~ /^(3128|8080|8000|8888|8118|1080|443)$/){print}' "$workdir/all_ipports.txt" > "$workdir/others.txt" || true
+          cat "$workdir/preferred.txt" "$workdir/others.txt" | awk '!seen[$0]++' > "$workdir/ordered.txt"
+
+          total=$(wc -l < "$workdir/ordered.txt" || echo 0)
+          echo "➡ Candidates total (deduped): $total"
+
+          if [[ "$total" -eq 0 ]]; then
+            echo "❌ Candidate list is empty after filtering." >&2
+            exit 1
+          fi
+
+          # Build full URLs (http://IP:PORT)
+          sed 's#^#http://#' "$workdir/ordered.txt" > "$candidates"
+
+          # We will validate using an HTTP endpoint (no CONNECT needed).
+          target='http://ip-api.com/json'
+
+          # Probe in waves to avoid spending too much time on dead proxies.
+          # First try top 75, then expand to 200 if needed.
+          try_limit1=75
+          try_limit2=200
           selected=""
-          while IFS= read -r proxy; do
-            echo "→ Trying $proxy"
-            # Query ipinfo through the proxy with a short timeout
-            if out="$(curl -x "$proxy" -m 6 -sS https://ipinfo.io/json || true)"; then
-              if grep -q '"country": *"GB"' <<<"$out"; then
-                echo "✅ Working UK proxy found: $proxy"
-                selected="$proxy"
-                break
-              fi
-            fi
-          done < <(head -n 50 "$workdir/proxies.txt")
 
-          if [[ -z "${selected}" ]]; then
-            echo "❌ No working UK proxy found right now. Try re-running the job." >&2
-            exit 1
+          probe_batch () {
+            local limit="$1"
+            local i=0
+            while IFS= read -r proxy; do
+              i=$((i+1))
+              [[ $i -gt $limit ]] && break
+              echo "→ Trying $proxy"
+              # Quick probe: 5s timeout, 1 retry
+              if out="$(curl -x "$proxy" -m 5 --retry 1 -sS "$target" || true)"; then
+                # Expect JSON with "country":"GB"
+                if grep -q '"country"[[:space:]]*:[[:space:]]*"United Kingdom"' <<<"$out" || grep -q '"countryCode"[[:space:]]*:[[:space:]]*"GB"' <<<"$out"; then
+                  echo "✅ Working UK proxy found: $proxy"
+                  selected="$proxy"
+                  echo "$out"
+                  return 0
+                fi
+              fi
+            done < "$candidates"
+            return 1
+          }
+
+          echo "🧪 Testing first $try_limit1 candidates..."
+          if ! probe_batch "$try_limit1"; then
+            echo "🔁 Expanding search to $try_limit2 candidates..."
+            if ! probe_batch "$try_limit2"; then
+              echo "❌ No working UK proxy found right now. Free lists are volatile. Try re-running the job." >&2
+              exit 1
+            fi
           fi
 
-          # Export for this job + set as a step output
+          # Export for downstream steps
           echo "UK_PROXY=${selected}" >> "$GITHUB_ENV"
           echo "proxy=${selected}" >> "$GITHUB_OUTPUT"
 
-      - name: Verify UK IP (should show country GB)
-        run: |
-          echo "Proxy: $UK_PROXY"
-          curl -x "$UK_PROXY" -s https://ipinfo.io
-          echo
-          echo "If the response above contains \"country\": \"GB\", we are good."
+        
 
       ############################################################
       # Playwright Tests
