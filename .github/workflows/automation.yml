@@ -1,21 +1,4 @@
 
-<<<<<<< HEAD
-- name: Log results in Google Sheets
-  env:
-    GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
-    GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-
-    PW_STATUS: ${{ job.status }}
-    PW_NOTES: "Run finished"
-    ARTIFACT_URL: ${{ steps.upload_artifacts.outputs.artifact-url }}
-
-    DEVICE: "desktop"            # or mobile, or read from matrix
-    TEST_SUITE: "Full Regression"
-    TRAFFIC_SOURCE: "organic"    # or set dynamically
-    EVENTS_TRIGGERED: ${{ steps.collect_events.outputs.events }}
-
-  run: node scripts/update-google-sheet.js
-=======
 name: QA Automation Pipeline
 
 on:
@@ -66,6 +49,7 @@ jobs:
         run: npx playwright install --with-deps
 
       - name: Run tests
+        id: run_tests
         run: |
           npx playwright test --reporter=line
 
@@ -73,6 +57,7 @@ jobs:
       # Upload screenshots + videos
       ############################################################
       - name: Upload Playwright Artifacts
+        id: upload_artifacts
         uses: actions/upload-artifact@v4
         with:
           name: playwright-artifacts
@@ -82,12 +67,19 @@ jobs:
           retention-days: 30
 
       ############################################################
-      # Update Google Sheet with results
+      # Update Google Sheet with results (MERGED VERSION)
       ############################################################
       - name: Log results in Google Sheet
         env:
           GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-        run: node ./scripts/update-google-sheet.js
-``
->>>>>>> c5f70b50f0a0684a6d96101b06a30537846147fd
+
+          PW_STATUS: ${{ job.status }}
+          PW_NOTES: "Run finished"
+          ARTIFACT_URL: ${{ steps.upload_artifacts.outputs.artifact-url }}
+
+          DEVICE: "desktop"
+          TEST_SUITE: "Full Regression"
+          TRAFFIC_SOURCE: "organic"
+          EVENTS_TRIGGERED: ${{ steps.collect_events.outputs.events }}
+        run: node scripts/update-google-sheet.js
