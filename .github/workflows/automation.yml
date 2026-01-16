@@ -23,33 +23,65 @@ jobs:
         run: npm ci
 
       ############################################################
-      # Connect to UK VPN (ExpressVPN)
+      # Auto-discover a live UK HTTP proxy (no VPN needed)
       ############################################################
-
-      - name: Install ExpressVPN
+      - name: Discover working UK proxy
+        id: get_proxy
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ca-certificates curl
+          set -Eeuo pipefail
 
-          # Download official installer (stable + maintained)
-          curl -L https://www.expressvpn.com/clients/linux/expressvpn_install.sh -o expressvpn_install.sh
-          chmod +x expressvpn_install.sh
+          echo "🔎 Fetching UK proxy candidates from public sources..."
+          workdir="$(mktemp -d)"
+          list="$workdir/proxies_raw.txt"
 
-          # Install ExpressVPN
-          sudo bash expressvpn_install.sh
+          # Source 1: ProxyScrape (HTTP, GB, <=4s timeout)
+          curl -fsSL 'https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=4000&country=gb&ssl=all&anonymity=all' \
+            | tr -d '\r' > "$list" || true
 
-      - name: Activate ExpressVPN
+          # Source 2: proxy-list.download (HTTP, GB)
+          # (Sometimes rate-limited; use '|| true' to keep going if it fails)
+          curl -fsSL 'https://www.proxy-list.download/api/v1/get?type=http&country=GB' \
+            | tr -d '\r' >> "$list" || true
+
+          # Normalize -> add scheme, de-duplicate, keep non-empty
+          awk 'NF' "$list" | sed 's#^#http://#' | awk '!seen[$0]++' > "$workdir/proxies.txt"
+
+          echo "➡ Candidate count: $(wc -l < "$workdir/proxies.txt")"
+          if [[ ! -s "$workdir/proxies.txt" ]]; then
+            echo "❌ Could not fetch any UK proxies." >&2
+            exit 1
+          fi
+
+          echo "🧪 Testing up to 50 proxies for GB IP..."
+          selected=""
+          while IFS= read -r proxy; do
+            echo "→ Trying $proxy"
+            # Query ipinfo through the proxy with a short timeout
+            if out="$(curl -x "$proxy" -m 6 -sS https://ipinfo.io/json || true)"; then
+              if grep -q '"country": *"GB"' <<<"$out"; then
+                echo "✅ Working UK proxy found: $proxy"
+                selected="$proxy"
+                break
+              fi
+            fi
+          done < <(head -n 50 "$workdir/proxies.txt")
+
+          if [[ -z "${selected}" ]]; then
+            echo "❌ No working UK proxy found right now. Try re-running the job." >&2
+            exit 1
+          fi
+
+          # Export for this job + set as a step output
+          echo "UK_PROXY=${selected}" >> "$GITHUB_ENV"
+          echo "proxy=${selected}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify UK IP (should show country GB)
         run: |
-          echo "${{ secrets.EXPRESSVPN_ACTIVATION_CODE }}" | sudo expressvpn activate
-          sudo expressvpn preferences set auto_connect true
-
-      - name: Connect to UK
-        run: sudo expressvpn connect "UK - Docklands"
-
-      - name: Verify VPN
-        run: |
-          expressvpn status
-          curl -s https://ipinfo.io
+          echo "Proxy: $UK_PROXY"
+          curl -x "$UK_PROXY" -s https://ipinfo.io
+          echo
+          echo "If the response above contains \"country\": \"GB\", we are good."
 
       ############################################################
       # Playwright Tests

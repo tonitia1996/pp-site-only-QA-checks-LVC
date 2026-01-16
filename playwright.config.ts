@@ -5,6 +5,7 @@ export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
   timeout: 90_000,
+
   expect: {
     timeout: 10_000,
   },
@@ -17,6 +18,15 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     actionTimeout: 15_000,
     navigationTimeout: 30_000,
+
+    // ⭐ Optional UK proxy (injected by CI step). When not set, tests run normally.
+    proxy: process.env.UK_PROXY ? { server: process.env.UK_PROXY } : undefined,
+
+    // ⭐ UK user experience (IP gives geo; these ensure locale/timezone/geo are UK-like)
+    locale: 'en-GB',
+    timezoneId: 'Europe/London',
+    geolocation: { longitude: -0.1276, latitude: 51.5072 }, // London
+    permissions: ['geolocation'],
   },
 
   // Retries in CI
