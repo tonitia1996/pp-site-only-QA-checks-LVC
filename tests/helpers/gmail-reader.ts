@@ -6,6 +6,7 @@ interface FindEmailOptions {
   subjectIncludes?: string;
   bodyIncludes?: string[];
   from?: string;
+  to?: string;              // INCLUDED
   waitSeconds?: number;
 }
 
@@ -19,12 +20,13 @@ export async function findEmail({
   subjectIncludes,
   bodyIncludes = [],
   from,
+  to,                       // INCLUDED
   waitSeconds = 10
 }: FindEmailOptions): Promise<EmailResult | null> {
 
   return new Promise((resolve, reject) => {
 
-    // Ensure env vars are defined
+    // Ensure env vars are provided
     const user = process.env.GMAIL_USERNAME ?? '';
     const password = process.env.GMAIL_APP_PASSWORD ?? '';
 
@@ -48,6 +50,7 @@ export async function findEmail({
       imap.openBox('INBOX', true, cb);
     };
 
+    // When IMAP is connected
     imap.once('ready', () => {
       setTimeout(() => {
         openInbox((err, box) => {
@@ -55,9 +58,16 @@ export async function findEmail({
 
           const searchCriteria: any[] = [];
 
-          if (subjectIncludes) searchCriteria.push(['HEADER', 'SUBJECT', subjectIncludes]);
-          if (from) searchCriteria.push(['HEADER', 'FROM', from]);
+          if (subjectIncludes)
+            searchCriteria.push(['HEADER', 'SUBJECT', subjectIncludes]);
 
+          if (from)
+            searchCriteria.push(['HEADER', 'FROM', from]);
+
+          if (to)
+            searchCriteria.push(['HEADER', 'TO', to]);      // INCLUDED
+
+          // If no criteria specified, scan entire inbox
           if (searchCriteria.length === 0) searchCriteria.push('ALL');
 
           imap.search(searchCriteria, (err: Error | null, results: number[]) => {
@@ -66,9 +76,9 @@ export async function findEmail({
               return resolve(null);
             }
 
-            const f = imap.fetch(results, { bodies: '' });
+            const fetcher = imap.fetch(results, { bodies: '' });
 
-            f.on('message', (msg: ImapMessage) => {
+            fetcher.on('message', (msg: ImapMessage) => {
               msg.on('body', (stream: NodeJS.ReadableStream, info: ImapMessageBodyInfo) => {
                 simpleParser(stream, (err: Error | null, parsed: any) => {
                   if (err) return reject(err);
@@ -92,7 +102,7 @@ export async function findEmail({
             });
           });
         });
-      }, waitSeconds * 1000);
+      }, waitSeconds * 1000); // allow email time to arrive
     });
 
     imap.once('error', (err: Error) => reject(err));
