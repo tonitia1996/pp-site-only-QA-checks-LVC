@@ -1,4 +1,3 @@
-
 name: QA Automation Pipeline
 
 on:
@@ -25,22 +24,29 @@ jobs:
       ############################################################
       # Connect to UK VPN (ExpressVPN)
       ############################################################
+
       - name: Install ExpressVPN CLI
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ca-certificates curl
-          curl -o expressvpn.deb https://www.expressvpn.works/clients/linux/expressvpn_3.64.0.9-1_amd64.deb
-          sudo dpkg -i expressvpn.deb || sudo apt-get install -f -y
-
-
-- name: Activate ExpressVPN
   run: |
-    echo "${{ secrets.EXPRESSVPN_ACTIVATION_CODE }}" | sudo expressvpn activate
-    sudo expressvpn preferences set auto_connect true
+    sudo apt-get update
+    sudo apt-get install -y ca-certificates curl gpg
+    curl -o expressvpn_public_key.asc https://www.expressvpn.works/keys/public_key_2022.asc
+    gpg --dearmor expressvpn_public_key.asc
+    sudo install -o root -g root -m 644 expressvpn_public_key.asc.gpg /usr/share/keyrings/expressvpn_keyring.gpg
+    echo "deb [signed-by=/usr/share/keyrings/expressvpn_keyring.gpg] https://www.expressvpn.works/debian stable main" | sudo tee /etc/apt/sources.list.d/expressvpn.list
+    sudo apt-get update
+    sudo apt-get install -y expressvpn
 
+      - name: Activate ExpressVPN
+  run: echo "${{ secrets.EXPRESSVPN_ACTIVATION_CODE }}" | sudo expressvpn activate
 
-      - name: Connect to UK server
-        run: sudo expressvpn connect "UK - London"
+      - name: Connect to UK
+  run: sudo expressvpn connect "UK - Docklands"
+
+      - name: Verify VPN
+  run: |
+    expressvpn status
+    curl -s https://ipinfo.io
+
 
       ############################################################
       # Playwright Tests
