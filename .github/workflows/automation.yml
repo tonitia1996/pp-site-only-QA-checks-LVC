@@ -30,7 +30,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ca-certificates curl gpg
-          curl -o expressvpn_public_key.asc https://www.expressvpn.works/keys/public_key_2022.asc
+          curl -L -o expressvpn_public_key.asc https://www.expressvpn.works/keys/public_key_2022.asc
           gpg --dearmor expressvpn_public_key.asc
           sudo install -o root -g root -m 644 expressvpn_public_key.asc.gpg /usr/share/keyrings/expressvpn_keyring.gpg
           echo "deb [signed-by=/usr/share/keyrings/expressvpn_keyring.gpg] https://www.expressvpn.works/debian stable main" | sudo tee /etc/apt/sources.list.d/expressvpn.list
@@ -38,3 +38,59 @@ jobs:
           sudo apt-get install -y expressvpn
 
       - name: Activate ExpressVPN
+        run: |
+          echo "${{ secrets.EXPRESSVPN_ACTIVATION_CODE }}" | sudo expressvpn activate
+          sudo expressvpn preferences set auto_connect true
+
+      - name: Connect to UK
+        run: sudo expressvpn connect "UK - Docklands"
+
+      - name: Verify VPN
+        run: |
+          expressvpn status
+          curl -s https://ipinfo.io
+
+      ############################################################
+      # Playwright Tests
+      ############################################################
+
+      - name: Install Browsers
+        run: npx playwright install --with-deps
+
+      - name: Run tests
+        id: run_tests
+        run: npx playwright test --reporter=line
+
+      ############################################################
+      # Upload Artifacts
+      ############################################################
+
+      - name: Upload Playwright Artifacts
+        id: upload_artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            test-results/**
+            playwright-report/**
+          retention-days: 30
+
+      ############################################################
+      # Log results in Google Sheets
+      ############################################################
+
+      - name: Log results in Google Sheet
+        env:
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+
+          PW_STATUS: ${{ job.status }}
+          PW_NOTES: "Run finished"
+          ARTIFACT_URL: ${{ steps.upload_artifacts.outputs.artifact-url }}
+
+          DEVICE: "desktop"
+          TEST_SUITE: "Full Regression"
+          TRAFFIC_SOURCE: "organic"
+          EVENTS_TRIGGERED: ""
+
+        run: node scripts/update-google-sheet.js
