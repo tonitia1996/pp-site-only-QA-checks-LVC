@@ -1,0 +1,47 @@
+
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node", "playwright"],
+
+    /* Interop & JSON imports */
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+
+    /* Safety & consistency */
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUncheckedIndexedAccess": true,
+    "useUnknownInCatchVariables": true,
+
+    /* Build behavior */
+    "noEmit": true,
+
+    /* Aliases (optional but handy) */
+    "baseUrl": ".",
+    "paths": {
+      "@helpers/*": ["tests/helpers/*"],
+      "@data/*": ["test-data/*"]
+    },
+
+    /* Keep these for future build steps even if noEmit is true */
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": [
+    "playwright.config.ts",
+    "tests/**/*.ts",
+    "scripts/**/*.ts",
+    "test-data/**/*.json"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.js"
+  ]
+}
