@@ -2,7 +2,7 @@
 name: QA Automation Pipeline
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
   schedule:
     - cron: "0 8 * * 1"   # every Monday at 08:00 GMT
 
@@ -14,18 +14,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Install Node
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # Install dependencies
       - name: Install dependencies
         run: npm ci
 
       ############################################################
-      # Connect to UK VPN (ExpressVPN CLI)
+      # Connect to UK VPN (ExpressVPN)
       ############################################################
       - name: Install ExpressVPN CLI
         run: |
@@ -43,7 +41,7 @@ jobs:
         run: sudo expressvpn connect "UK - London"
 
       ############################################################
-      # Run Playwright Tests
+      # Playwright Tests
       ############################################################
       - name: Install Browsers
         run: npx playwright install --with-deps
@@ -54,7 +52,7 @@ jobs:
           npx playwright test --reporter=line
 
       ############################################################
-      # Upload screenshots + videos
+      # Upload Test Artifacts
       ############################################################
       - name: Upload Playwright Artifacts
         id: upload_artifacts
@@ -67,7 +65,7 @@ jobs:
           retention-days: 30
 
       ############################################################
-      # Update Google Sheet with results (MERGED VERSION)
+      # Log results in Google Sheets
       ############################################################
       - name: Log results in Google Sheet
         env:
@@ -81,5 +79,6 @@ jobs:
           DEVICE: "desktop"
           TEST_SUITE: "Full Regression"
           TRAFFIC_SOURCE: "organic"
-          EVENTS_TRIGGERED: ${{ steps.collect_events.outputs.events }}
+          EVENTS_TRIGGERED: ""
+
         run: node scripts/update-google-sheet.js
