@@ -1,0 +1,10 @@
+
+{
+  "failedCreditCard": {
+    "number": "4000058260000005",
+    "expiryMonth": "12",
+    "expiryYear": "34",
+    "cvv": "868",
+    "amount": "50"
+  }
+}

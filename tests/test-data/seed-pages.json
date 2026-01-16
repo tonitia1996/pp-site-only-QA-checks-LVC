@@ -1,0 +1,7 @@
+
+[
+  { "name": "Homepage", "path": "/" },
+  { "name": "Promotions", "path": "/promotions" },
+  { "name": "Games (Catalog)", "path": "/games" },
+  { "name": "Terms & Conditions", "path": "/terms-and-conditions" }
+]

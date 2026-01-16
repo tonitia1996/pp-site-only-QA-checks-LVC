@@ -1,0 +1,16 @@
+
+- name: Log results in Google Sheets
+  env:
+    GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+    GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+
+    PW_STATUS: ${{ job.status }}
+    PW_NOTES: "Run finished"
+    ARTIFACT_URL: ${{ steps.upload_artifacts.outputs.artifact-url }}
+
+    DEVICE: "desktop"            # or mobile, or read from matrix
+    TEST_SUITE: "Full Regression"
+    TRAFFIC_SOURCE: "organic"    # or set dynamically
+    EVENTS_TRIGGERED: ${{ steps.collect_events.outputs.events }}
+
+  run: node scripts/update-google-sheet.js
