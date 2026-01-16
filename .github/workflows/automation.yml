@@ -32,10 +32,12 @@ jobs:
           curl -o expressvpn.deb https://www.expressvpn.works/clients/linux/expressvpn_3.64.0.9-1_amd64.deb
           sudo dpkg -i expressvpn.deb || sudo apt-get install -f -y
 
-      - name: Activate ExpressVPN
-        run: |
-          echo "${{ secrets.EXPRESSVPN_ACTIVATION_CODE }}" | sudo expressvpn activate
-          sudo expressvpn preferences set auto_connect true
+
+- name: Activate ExpressVPN
+  run: |
+    echo "${{ secrets.EXPRESSVPN_ACTIVATION_CODE }}" | sudo expressvpn activate
+    sudo expressvpn preferences set auto_connect true
+
 
       - name: Connect to UK server
         run: sudo expressvpn connect "UK - London"
