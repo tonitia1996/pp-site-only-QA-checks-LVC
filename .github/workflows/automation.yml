@@ -26,16 +26,17 @@ jobs:
       # Connect to UK VPN (ExpressVPN)
       ############################################################
 
-      - name: Install ExpressVPN CLI
+      - name: Install ExpressVPN
         run: |
           sudo apt-get update
-          sudo apt-get install -y ca-certificates curl gpg
-          curl -L -o expressvpn_public_key.asc https://www.expressvpn.works/keys/public_key_2022.asc
-          gpg --dearmor expressvpn_public_key.asc
-          sudo install -o root -g root -m 644 expressvpn_public_key.asc.gpg /usr/share/keyrings/expressvpn_keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/expressvpn_keyring.gpg] https://www.expressvpn.works/debian stable main" | sudo tee /etc/apt/sources.list.d/expressvpn.list
-          sudo apt-get update
-          sudo apt-get install -y expressvpn
+          sudo apt-get install -y ca-certificates curl
+
+          # Download official installer (stable + maintained)
+          curl -L https://www.expressvpn.com/clients/linux/expressvpn_install.sh -o expressvpn_install.sh
+          chmod +x expressvpn_install.sh
+
+          # Install ExpressVPN
+          sudo bash expressvpn_install.sh
 
       - name: Activate ExpressVPN
         run: |
@@ -62,7 +63,7 @@ jobs:
         run: npx playwright test --reporter=line
 
       ############################################################
-      # Upload Artifacts
+      # Upload Test Artifacts
       ############################################################
 
       - name: Upload Playwright Artifacts
