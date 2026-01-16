@@ -2,8 +2,9 @@
 // tests/smoke/images-loading.spec.ts
 import { test, Page } from '@playwright/test';
 import { Utils } from '../helpers/utils';
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
+
 
 type SeedPage = { name: string; path: string };
 
